@@ -20,7 +20,7 @@ stock_quantity (int)
 
 Please write a SQL query to solve this problem.*/
 
---------------------------------My attempt ------------------------------------------------------
+--------------------------------My first attempt ------------------------------------------------------
 
 WITH Product_Combo AS -- To find all combinations
 (
@@ -66,7 +66,7 @@ left join stock2 s2 on s2.pd2 = agg.pd2
 group by product_name1,product_name2, rn
 having max(stock1) <20 or max(stock2)<20 
 
-------------------- Better Answer -------------------------------------------------------------
+-------------------  Answer Proposed By Claude Sonnet 3.5 -------------------------------------------------------------
 
 WITH ProductPairs AS (
     SELECT o1.product_id AS product1, o2.product_id AS product2, o1.order_id
@@ -96,3 +96,35 @@ FROM FrequentPairs fp
 JOIN LowStockProducts lsp1 ON fp.product1 = lsp1.product_id -- we only wanted entries where both the products are low on stock. 
 JOIN LowStockProducts lsp2 ON fp.product2 = lsp2.product_id
 ORDER BY fp.order_count DESC;
+
+
+-------- Prompted Claude that using just a join would eliminate records where either is low on stock. -----------------
+-------- After a few iterations this is the best this seems to be the best answer ------------------
+------  We also discussed the nuances of adding the Stock clause in the JOIN v/s in WHERE and ended up on WHERE for flexibility and null-handling---
+
+WITH Product_Combo AS (
+  SELECT O1.ORDER_ID AS OD1, O1.PRODUCT_ID AS PD1, O2.PRODUCT_ID AS PD2
+  FROM ORDERS O1
+  JOIN ORDERS O2 ON O1.ORDER_ID = O2.ORDER_ID AND O1.PRODUCT_ID < O2.PRODUCT_ID
+),
+aggregating AS (
+  SELECT PD1, PD2, COUNT(DISTINCT OD1) AS pair_count
+  FROM Product_Combo
+  GROUP BY PD1, PD2 
+  HAVING COUNT(DISTINCT OD1) > 100
+),
+stock_info AS (
+  SELECT product_id, product_name, stock
+  FROM products
+)
+SELECT 
+  COALESCE(s1.product_name, 'Unknown') AS product_name1, 
+  s1.stock AS stock1,
+  COALESCE(s2.product_name, 'Unknown') AS product_name2, 
+  s2.stock AS stock2,
+  a.pair_count
+FROM aggregating a
+LEFT JOIN stock_info s1 ON s1.product_id = a.PD1
+LEFT JOIN stock_info s2 ON s2.product_id = a.PD2
+WHERE (s1.stock < 20 OR s1.stock IS NULL) OR (s2.stock < 20 OR s2.stock IS NULL)
+ORDER BY a.pair_count DESC;
